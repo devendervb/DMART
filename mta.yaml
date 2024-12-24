@@ -1,0 +1,80 @@
+_schema-version: 3.3.0
+ID: dmart
+description: A simple CAP project.
+version: 1.0.0
+modules:
+- name: dmart-srv
+  type: nodejs
+  path: gen/srv
+  requires:
+  - name: dmart-db
+  - name: uaa_dmart
+  provides:
+  - name: srv-api
+    properties:
+      srv-url: ${default-url}
+  parameters:
+    buildpack: nodejs_buildpack
+    readiness-health-check-http-endpoint: /health
+    readiness-health-check-type: http
+  build-parameters:
+    builder: npm
+- name: dmart-db-deployer
+  type: hdb
+  path: gen/db
+  requires:
+  - name: dmart-db
+  parameters:
+    buildpack: nodejs_buildpack
+- name: dmart-destination-content
+  type: com.sap.application.content
+  requires:
+  - name: dmart-destination-service
+    parameters:
+      content-target: true
+  - name: uaa_dmart
+    parameters:
+      service-key:
+        name: uaa_dmart-key
+  parameters:
+    content:
+      instance:
+        destinations:
+        - Authentication: OAuth2UserTokenExchange
+          Name: dmart_uaa_dmart
+          ServiceInstanceName: dmart-xsuaa-service
+          ServiceKeyName: uaa_dmart-key
+          sap.cloud.service: dmart
+        existing_destinations_policy: ignore
+  build-parameters:
+    no-source: true
+resources:
+- name: dmart-db
+  type: com.sap.xs.hdi-container
+  parameters:
+    service: hana
+    service-plan: hdi-shared
+- name: dmart-destination-service
+  type: org.cloudfoundry.managed-service
+  parameters:
+    config:
+      HTML5Runtime_enabled: true
+      version: 1.0.0
+    service: destination
+    service-name: dmart-destination-service
+    service-plan: lite
+- name: uaa_dmart
+  type: org.cloudfoundry.managed-service
+  parameters:
+    path: ./xs-security.json
+    service: xsuaa
+    service-name: dmart-xsuaa-service
+    service-plan: application
+parameters:
+  enable-parallel-deployments: true
+build-parameters:
+  before-all:
+  - builder: custom
+    commands:
+    - npm ci
+    - npx cds build --production
